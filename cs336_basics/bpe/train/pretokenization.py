@@ -114,7 +114,7 @@ def pretokenize(
                 max_chunks_found = len(boundaries)-1
                 max_chunk_boundaries = boundaries
     print("Num processes for pretokenization -- Desired:", desired_num_processes, "Actual:", max_chunks_found)
-    worker_fn = partial(pretokenize_chunk, input_path=input_path, special_tokens=special_tokens) 
+    worker_fn = partial(pretokenize_chunk, input_path=input_path, special_tokens=special_tokens, pretokenize_regex=GPT2_PRE_TOKENIZER) 
     workers_arg = list(zip(max_chunk_boundaries[:-1], max_chunk_boundaries[1:]))
     with Pool(processes=max_chunks_found) as pool:
         results = pool.starmap(worker_fn, workers_arg)

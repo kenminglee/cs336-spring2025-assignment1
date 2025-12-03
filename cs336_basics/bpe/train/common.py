@@ -52,26 +52,29 @@ class BytePair:
 
     def add_parent(self, parent:PreToken):
         self.parents.add(parent)
-        self.count += parent.bp_count[self.bp]*parent.num_occurrence
+        self.count += (parent.bp_count[self.bp]*parent.num_occurrence)
     
     def remove_parent(self, parent: PreToken, old_bp_count: dict[tuple[bytes, bytes],int]):
         self.parents.remove(parent)
         self.count -= (parent.num_occurrence*old_bp_count[self.bp])
 
+    def update_parent_count(self, parent: PreToken, old_bp_count: dict[tuple[bytes, bytes], int]):
+        self.count -= (parent.num_occurrence*old_bp_count[self.bp])
+        self.count += (parent.num_occurrence*parent.bp_count[self.bp])
 
 def train(
     pretokens: Counter[str], # obtained after pretokenization step
     vocab_size:int,
     special_tokens:list[str],
 ) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
-    assert vocab_size>(min:=256+len(special_tokens)), f"Vocab size must be at least {min}"
+    assert vocab_size>(min_vocab_size:=256+len(special_tokens)), f"Vocab size must be at least {min_vocab_size}"
 
     vocab: dict[int, bytes] = {i:tok.encode("utf-8") for i,tok in enumerate(special_tokens)}
     vocab.update({len(special_tokens)+i : bytes([i]) for i in range(256)})
     merges: list[tuple[bytes, bytes]] = []
     bps:dict[tuple[bytes, bytes], BytePair] = {}
-    for i, (pretoken, count) in enumerate(pretokens.items()):
-        pretok = PreToken(i, tuple(bytes([tok]) for tok in pretoken.encode("utf-8")), count)
+    for uid, (pretoken, count) in enumerate(pretokens.items()):
+        pretok = PreToken(uid, tuple(bytes([tok]) for tok in pretoken.encode("utf-8")), count)
         for bp in pretok.bp_count.keys():
             if bp not in bps:
                 bps[bp] = BytePair(bp)
@@ -105,7 +108,7 @@ def train(
             old_bp_count = pretok.merge_and_update(bp_to_merge)
             new_bp_count = pretok.bp_count
 
-            # find byte pairs that no longer exist due to the merge
+            # 1) find byte pairs that no longer exist due to the merge
             bps_to_remove = old_bp_count.keys() - new_bp_count.keys()
 
             for bp in bps_to_remove:
@@ -115,7 +118,7 @@ def train(
                 # remove PreToken parent from this bytepair
                 bps[bp].remove_parent(pretok, old_bp_count)
 
-            # find new byte pairs created due to the merge
+            # 2) find new byte pairs created due to the merge
             bps_to_add = new_bp_count.keys() - old_bp_count.keys()
             # print(f"pretok: {pretok.bytestring}, bps_to_remove: {bps_to_remove}, bps_to_add: {bps_to_add}")
             for bp in bps_to_add:
@@ -123,6 +126,14 @@ def train(
                     bps[bp] = BytePair(bp)
                 bps[bp].add_parent(pretok)
 
+            # 3) find existing byte pairs whose count has changed
+            #    i) find unchanged bps whose count DID NOT change
+            unchanged_bps_w_unchanged_values:set[tuple[bytes, bytes]] = {i[0] for i in (new_bp_count.items() & old_bp_count.items())} 
+            #    ii) find all unchanged bps 
+            unchanged_bps:set[tuple[bytes,bytes]] = new_bp_count.keys() & old_bp_count.keys()
+            #    iii) loop through all unchanged_bps with CHANGED values
+            for bp in (unchanged_bps - unchanged_bps_w_unchanged_values):
+                bps[bp].update_parent_count(pretok, old_bp_count)
         # no longer needed since the bytepair (i.e., 2 tokens) is now considered a single token              
         del bps[bp_to_merge]
 
