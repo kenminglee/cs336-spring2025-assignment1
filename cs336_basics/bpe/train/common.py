@@ -91,20 +91,19 @@ def train(
                 maxes = [bp.bp]
             elif bp.count == max_count:
                 maxes.append(bp.bp)
-            # print(bp.bp, bp.count)
-
-        # print(max_count, maxes) 
+            
         
         # Find lexicographically greatest pair among tiebreakers
         bp_to_merge = max(maxes)
 
         # Update all pretokens that are affected by the merge (i.e., contain the merged bytepair)
         for pretok in bps[bp_to_merge].parents:
-            # e.g., Pretok: l,o,w,e,s,t, merge "s,t"
-            # old_bp_count: {(l,o):1, (o,w):1, (w,e):1, (e,s):1, (s,t):1}
-            # new_bp_count: {(l,o):1, (o,w):1, (w,e):1, (e,st): 1 }
-            # bps_to_remove = {(e,s), (s,t)}
-            # bps_to_add = {(e,st)}
+            # e.g., Pretok: a,b,c,b,c, merge "a,b"
+            # old_bp_count: {(a,b):1, (b,c):2, (c,b):1}
+            # new_bp_count: {(ab,c):1, (b,c):1, (c,b):1}
+            # step 1: bps_to_remove = {(a, b)}
+            # step 2: bps_to_add = {(ab, c)}
+            # step 3: unchanged_bps_w_changed_value = {(b,c)}
             old_bp_count = pretok.merge_and_update(bp_to_merge)
             new_bp_count = pretok.bp_count
 
@@ -120,7 +119,7 @@ def train(
 
             # 2) find new byte pairs created due to the merge
             bps_to_add = new_bp_count.keys() - old_bp_count.keys()
-            # print(f"pretok: {pretok.bytestring}, bps_to_remove: {bps_to_remove}, bps_to_add: {bps_to_add}")
+            
             for bp in bps_to_add:
                 if bp not in bps:
                     bps[bp] = BytePair(bp)
@@ -131,9 +130,10 @@ def train(
             unchanged_bps_w_unchanged_values:set[tuple[bytes, bytes]] = {i[0] for i in (new_bp_count.items() & old_bp_count.items())} 
             #    ii) find all unchanged bps 
             unchanged_bps:set[tuple[bytes,bytes]] = new_bp_count.keys() & old_bp_count.keys()
-            #    iii) loop through all unchanged_bps with CHANGED values
+            #    iii) loop through all unchanged_bps with CHANGED values, and update their counts
             for bp in (unchanged_bps - unchanged_bps_w_unchanged_values):
                 bps[bp].update_parent_count(pretok, old_bp_count)
+
         # no longer needed since the bytepair (i.e., 2 tokens) is now considered a single token              
         del bps[bp_to_merge]
 
