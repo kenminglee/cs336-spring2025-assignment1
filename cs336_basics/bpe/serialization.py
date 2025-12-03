@@ -73,7 +73,7 @@ def write_vocab_to_file(vocab: dict[int, bytes], json_filepath:str):
     data = {"".join([gpt2_byte_encoder[b] for b in token]):id_ for id_, token in vocab.items()}
 
     with open(json_filepath, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4)
+        json.dump(data, f, indent=4, ensure_ascii=False)
 
 # function obtained largely from tests/test_train_bpe.py
 def read_merges_from_file(txt_filepath:str)->list[tuple[bytes,bytes]]:
@@ -128,3 +128,5 @@ if __name__=="__main__":
 
     import shutil
     shutil.rmtree(tmp_dir)
+
+    

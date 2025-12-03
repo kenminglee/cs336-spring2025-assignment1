@@ -2,6 +2,8 @@ import os
 from collections import Counter
 from dataclasses import dataclass, field
 
+from tqdm import tqdm
+
 @dataclass
 class PreToken:
     # unique id so that class is hashable for quick retrieval
@@ -80,7 +82,7 @@ def train(
                 bps[bp] = BytePair(bp)
             bps[bp].add_parent(pretok)
     
-    while len(vocab) < vocab_size :
+    for _ in tqdm(range(vocab_size-len(vocab)), desc="Vocab size"):
     
         # Find bytepair(s) with maximum count
         max_count:int = 0
