@@ -83,12 +83,15 @@ def pretokenize_chunk(
 # used for when we want to pretokenize a string (single process)
 def pretokenize_str(
     text: str,
-    special_tokens:list[str],
-    pretokenize_regex: re.Pattern[str] = NON_WHITESPACE_PRE_TOKENIZER,
+    special_tokens:list[str]|None=None,
+    pretokenize_regex: re.Pattern[str] = GPT2_PRE_TOKENIZER,
     return_counter:bool = False # determines return type
 )-> list[str] | Counter[str]:
-    special_tok_pat = re.compile("| ".join(re.escape(tok) for tok in special_tokens))
-    chunks = re.split(special_tok_pat, text)
+    if special_tokens:
+        special_tok_pat = re.compile("| ".join(re.escape(tok) for tok in special_tokens))
+        chunks = re.split(special_tok_pat, text)
+    else:
+        chunks = [text]
     pretokens:list[str] = []
     for chunk in chunks:
         pretokens.extend([match.group() for match in re.finditer(pretokenize_regex, chunk)])
