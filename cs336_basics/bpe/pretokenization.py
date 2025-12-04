@@ -8,6 +8,9 @@ from itertools import chain
 
 from cs336_basics import ROOT_DIR
 
+GPT2_PRE_TOKENIZER = re.compile(r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""")
+NON_WHITESPACE_PRE_TOKENIZER = re.compile(r"\S+")
+
 # This function is important as it ensures we don't end up with boundaries that cut in the middle of a split_special_token
 # which is bound to happen if we naively split the large file into equal chunks
 # the following function is unchanged from https://github.com/stanford-cs336/assignment1-basics/blob/430e2c844e29f8aad8f9330e8706db9cb508241f/cs336_basics/pretokenization_example.py#L5
@@ -57,7 +60,6 @@ def find_chunk_boundaries(
     # Make sure all boundaries are unique, but might be fewer than desired_num_chunks
     return sorted(set(chunk_boundaries))
 
-GPT2_PRE_TOKENIZER = re.compile(r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""")
 
 def pretokenize_chunk(
     start:int,
@@ -78,8 +80,6 @@ def pretokenize_chunk(
     return Counter(pretokens) if return_counter else pretokens
 
 
-NON_WHITESPACE_PRE_TOKENIZER = re.compile(r"\S+")
-
 # used for when we want to pretokenize a string (single process)
 def pretokenize_str(
     text: str,
@@ -93,6 +93,7 @@ def pretokenize_str(
     for chunk in chunks:
         pretokens.extend([match.group() for match in re.finditer(pretokenize_regex, chunk)])
     return Counter(pretokens) if return_counter else pretokens
+
 
 # used for when we want to pretokenize a large file (multiple processes)
 def pretokenize(
@@ -126,19 +127,6 @@ def pretokenize(
     return sum(results, Counter()) if return_counter else list(chain.from_iterable(results))
 
 
-
-
-# ## Usage
-# with open(..., "rb") as f:
-#     num_processes = 4
-#     boundaries = find_chunk_boundaries(f, num_processes, b"<|endoftext|>")
-
-#     # The following is a serial implementation, but you can parallelize this
-#     # by sending each start/end pair to a set of processes.
-#     for start, end in zip(boundaries[:-1], boundaries[1:]):
-#         f.seek(start)
-#         chunk = f.read(end - start).decode("utf-8", errors="ignore")
-#         # Run pre-tokenization on your chunk and store the counts for each pre-token
 
 if __name__=="__main__":
     num_processes = 32
