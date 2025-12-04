@@ -14,7 +14,7 @@ def bpe_example(
     vocab_size: int,
     special_tokens: list[str] = ["<|endoftext|>"]
 ) -> tuple[dict[int, bytes], list[tuple[bytes,bytes]]]:
-    pretokens: Counter[str] = pretokenize_str(text, special_tokens, pretokenize_regex=NON_WHITESPACE_PRE_TOKENIZER)
+    pretokens: Counter[str] = pretokenize_str(text, special_tokens, pretokenize_regex=NON_WHITESPACE_PRE_TOKENIZER, return_counter=True)
     return train(pretokens, vocab_size, special_tokens)
 
 def train_bpe(
@@ -23,7 +23,7 @@ def train_bpe(
     special_tokens: list[str] = ["<|endoftext|>"],
     num_processes:int = 4
 ) -> tuple[dict[int, bytes], list[tuple[bytes,bytes]]]:
-    pretokens: Counter[str] = pretokenize(input_path, num_processes, special_tokens)
+    pretokens: Counter[str] = pretokenize(input_path, num_processes, special_tokens, return_counter=True)
     return train(pretokens, vocab_size, special_tokens)
 
 def train_bpe_tinystories(

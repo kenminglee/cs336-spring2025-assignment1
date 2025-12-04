@@ -2,8 +2,9 @@ from collections import Counter
 import os
 from typing import BinaryIO
 import regex as re
-from multiprocessing import Pool
+import multiprocessing
 from functools import partial
+from itertools import chain
 
 from cs336_basics import ROOT_DIR
 
@@ -63,8 +64,9 @@ def pretokenize_chunk(
     end:int,
     input_path: str | os.PathLike, 
     special_tokens: list[str],
-    pretokenize_regex: re.Pattern[str] = GPT2_PRE_TOKENIZER
-)->Counter[str]:
+    pretokenize_regex: re.Pattern[str] = GPT2_PRE_TOKENIZER,
+    return_counter: bool = False 
+)->list[str] | Counter[str]:
     special_tok_pat = re.compile("| ".join(re.escape(tok) for tok in special_tokens))
     pretokens:list[str] = []
     with open(input_path, "rb") as f:
@@ -73,7 +75,7 @@ def pretokenize_chunk(
     minichunks = re.split(special_tok_pat, chunk)
     for minichunk in minichunks:
         pretokens.extend([match.group() for match in re.finditer(pretokenize_regex, minichunk)])
-    return Counter(pretokens)
+    return Counter(pretokens) if return_counter else pretokens
 
 
 NON_WHITESPACE_PRE_TOKENIZER = re.compile(r"\S+")
@@ -82,20 +84,23 @@ NON_WHITESPACE_PRE_TOKENIZER = re.compile(r"\S+")
 def pretokenize_str(
     text: str,
     special_tokens:list[str],
-    pretokenize_regex: re.Pattern[str] = NON_WHITESPACE_PRE_TOKENIZER
-)-> Counter[str]:
+    pretokenize_regex: re.Pattern[str] = NON_WHITESPACE_PRE_TOKENIZER,
+    return_counter:bool = False # determines return type
+)-> list[str] | Counter[str]:
     special_tok_pat = re.compile("| ".join(re.escape(tok) for tok in special_tokens))
     chunks = re.split(special_tok_pat, text)
     pretokens:list[str] = []
     for chunk in chunks:
         pretokens.extend([match.group() for match in re.finditer(pretokenize_regex, chunk)])
-    return Counter(pretokens)
+    return Counter(pretokens) if return_counter else pretokens
 
 # used for when we want to pretokenize a large file (multiple processes)
 def pretokenize(
     input_path: str | os.PathLike, 
     desired_num_processes:int, 
-    special_tokens: list[str],)->Counter[str]:
+    special_tokens: list[str],
+    return_counter: bool=False # faster when set to true for large datasets
+)->list[str] | Counter[str]:
     with open(input_path, "rb") as f:
         special_tokens_bytes:list[bytes] = [s.encode("utf-8") for s in special_tokens]
         # In the case of multiple special tokens, find the best one to split on
@@ -114,11 +119,11 @@ def pretokenize(
                 max_chunks_found = len(boundaries)-1
                 max_chunk_boundaries = boundaries
     print("Num processes for pretokenization -- Desired:", desired_num_processes, "Actual:", max_chunks_found)
-    worker_fn = partial(pretokenize_chunk, input_path=input_path, special_tokens=special_tokens, pretokenize_regex=GPT2_PRE_TOKENIZER) 
+    worker_fn = partial(pretokenize_chunk, input_path=input_path, special_tokens=special_tokens, pretokenize_regex=GPT2_PRE_TOKENIZER, return_counter=return_counter) 
     workers_arg = list(zip(max_chunk_boundaries[:-1], max_chunk_boundaries[1:]))
-    with Pool(processes=max_chunks_found) as pool:
-        results = pool.starmap(worker_fn, workers_arg)
-    return sum(results, Counter())
+    with multiprocessing.get_context("spawn").Pool(processes=max_chunks_found) as pool:
+        results:list[list[str]] | list[Counter[str]]= pool.starmap(worker_fn, workers_arg)
+    return sum(results, Counter()) if return_counter else list(chain.from_iterable(results))
 
 
 
