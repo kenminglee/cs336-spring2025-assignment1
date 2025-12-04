@@ -19,10 +19,25 @@ class Tokenizer:
         self._vocab = vocab
         self._bytes_encoder: dict[bytes, int] = {v:k for k,v in vocab.items()}
         self._pretoken_encoder_cache: dict[str, list[int]] = {}
+        
+        # If special token is already in vocab, directly assign it in pretoken_encoder_cache so that it doesn't get touched during the merging process
+        # If special token is not in vocab, expand vocab to include this special token by assigning a new id 
+        if special_tokens:
+            # reverse sorting to ensure longer/overlapping patterns are captured first (e.g., "<|endoftext|><|endoftext|>" gets priority over "<|endoftext|>")
+            special_tokens = sorted(special_tokens, key=len, reverse=True)
+            unassigned_id = max(self._vocab.keys())+1
+            for special_tok in special_tokens:
+                special_tok_bytes = special_tok.encode("utf-8")
+                if special_tok_bytes not in self._bytes_encoder:
+                    self._bytes_encoder[special_tok_bytes] = unassigned_id
+                    self._vocab[unassigned_id] = special_tok_bytes
+                    unassigned_id += 1
+                self._pretoken_encoder_cache[special_tok] = [self._bytes_encoder[special_tok_bytes]]
+            
         self._merges = merges
         self._special_tokens = special_tokens
 
-
+    @classmethod
     def from_files(
         cls,
         vocab_filepath: str,
@@ -37,10 +52,11 @@ class Tokenizer:
         self,
         text: str
     ) -> list[int]:
-        pretoken_str_seq: list[str] = pretokenize_str(text, self._special_tokens)
+        pretoken_str_seq: list[str] = pretokenize_str(text, self._special_tokens, consume_special_token=False)
         pretokens: dict[str, PreToken] = {}
         bps: dict[tuple[bytes, bytes], BytePair] = {}
         for pretoken in set(pretoken_str_seq):
+            # if we have cached pretoken, or it is a special_token, skip it
             if pretoken in self._pretoken_encoder_cache:
                 continue
             pretokens[pretoken] = PreToken(len(pretokens), tuple(bytes([b]) for b in pretoken.encode("utf-8")), 0)
@@ -68,6 +84,7 @@ class Tokenizer:
                         bps[bp_to_add] = BytePair(bp_to_add)
                     bps[bp_to_add].add_parent(pretoken)
         
+        # Now that merging is complete, go through each merged byte for every pretoken, and convert them into integers
         pretoken_int_seq = []
         for pretoken_str in pretoken_str_seq:
             if pretoken_str not in self._pretoken_encoder_cache:
@@ -77,7 +94,8 @@ class Tokenizer:
 
 
     def encode_iterable(self, iterable: Iterable[str]) -> Iterator[int]:
-        pass
+        for string in iterable:
+            yield from self.encode(string)
 
     def decode(self, ids: list[int]) -> str:
         # Note: b'\xef\xbf\xbd' is the replacement character U+FFFD (aka '�'), obtained by doing `"\uFFFD".encode("utf-8")`
@@ -95,3 +113,34 @@ if __name__=="__main__":
     assert encoded==[9,7,1,5,10,3], "Incorrect encoding!"
     assert tokenizer.decode([9,7,1,5,10,3])==test_str, "Incorrect decoding!"
     print("bpe_encoding example passed!")
+
+    from cs336_basics import ROOT_DIR
+    import os
+    VOCAB_PATH = os.path.join(ROOT_DIR,"../tests/fixtures/gpt2_vocab.json")
+    MERGES_PATH = os.path.join(ROOT_DIR,"../tests/fixtures/gpt2_merges.txt")
+
+    print("Running test_roundtrip_unicode_string_with_special_tokens")
+    
+    tokenizer = Tokenizer.from_files(VOCAB_PATH, MERGES_PATH, ["<|endoftext|>"])
+    test_string = "Héllò hôw <|endoftext|><|endoftext|> are ü? 🙃<|endoftext|>"
+    encoded_ids = tokenizer.encode(test_string)
+    res = tokenizer.decode(encoded_ids)
+    tokenized_string = [tokenizer.decode([x]) for x in encoded_ids]
+    # Ensure the special <|endoftext|> token is preserved
+    assert tokenized_string.count("<|endoftext|>") == 3
+    assert res==test_string
+    print("test_roundtrip_unicode_string_with_special_tokens should be good")
+
+
+    print("Running test_overlapping_special_tokens")
+    tokenizer = Tokenizer.from_files(VOCAB_PATH, MERGES_PATH, ["<|endoftext|>", "<|endoftext|><|endoftext|>"])
+    test_string = "Hello, how <|endoftext|><|endoftext|> are you?<|endoftext|>"
+
+    ids = tokenizer.encode(test_string)
+    tokenized_string = [tokenizer.decode([x]) for x in ids]
+    # Ensure the double <|endoftext|><|endoftext|> is preserved as a single token
+    assert tokenized_string.count("<|endoftext|>") == 1
+    assert tokenized_string.count("<|endoftext|><|endoftext|>") == 1
+    # Test roundtrip
+    assert tokenizer.decode(ids) == test_string
+    print("test_overlapping_special_tokens should be good")

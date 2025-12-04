@@ -65,36 +65,53 @@ def pretokenize_chunk(
     start:int,
     end:int,
     input_path: str | os.PathLike, 
-    special_tokens: list[str],
+    special_tokens: list[str] | None, 
     pretokenize_regex: re.Pattern[str] = GPT2_PRE_TOKENIZER,
-    return_counter: bool = False 
+    return_counter: bool = False, 
+    consume_special_token:bool = True
 )->list[str] | Counter[str]:
-    special_tok_pat = re.compile("| ".join(re.escape(tok) for tok in special_tokens))
-    pretokens:list[str] = []
     with open(input_path, "rb") as f:
         f.seek(start)
         chunk = f.read(end - start).decode("utf-8", errors="ignore")
-    minichunks = re.split(special_tok_pat, chunk)
+    if special_tokens:
+        special_tok_pat = r"|".join(re.escape(tok) for tok in special_tokens)
+        special_tokens = set(special_tokens)
+        if not consume_special_token:
+            special_tok_pat = rf"({special_tok_pat})"
+        minichunks = re.split(special_tok_pat, chunk)
+    else:
+        minichunks = [chunk]
+    pretokens:list[str] = []
     for minichunk in minichunks:
-        pretokens.extend([match.group() for match in re.finditer(pretokenize_regex, minichunk)])
+        if special_tokens and not consume_special_token and minichunk in special_tokens:
+            pretokens.append(minichunk)
+        else:
+            pretokens.extend([match.group() for match in re.finditer(pretokenize_regex, minichunk)])
     return Counter(pretokens) if return_counter else pretokens
 
 
 # used for when we want to pretokenize a string (single process)
 def pretokenize_str(
     text: str,
-    special_tokens:list[str]|None=None,
+    special_tokens:list[str]|None=None, # must be a list since sequence matters!
     pretokenize_regex: re.Pattern[str] = GPT2_PRE_TOKENIZER,
-    return_counter:bool = False # determines return type
+    return_counter:bool = False, # determines return type
+    consume_special_token: bool = True
 )-> list[str] | Counter[str]:
     if special_tokens:
-        special_tok_pat = re.compile("| ".join(re.escape(tok) for tok in special_tokens))
+        special_tok_pat = "|".join(re.escape(tok) for tok in special_tokens)
+        special_tokens = set(special_tokens)
+        if not consume_special_token:
+            special_tok_pat = rf"({special_tok_pat})"
         chunks = re.split(special_tok_pat, text)
     else:
         chunks = [text]
     pretokens:list[str] = []
     for chunk in chunks:
-        pretokens.extend([match.group() for match in re.finditer(pretokenize_regex, chunk)])
+        if special_tokens and not consume_special_token and chunk in special_tokens:
+            pretokens.append(chunk)
+        else:
+            pretokens.extend([match.group() for match in re.finditer(pretokenize_regex, chunk)])
     return Counter(pretokens) if return_counter else pretokens
 
 
@@ -103,7 +120,8 @@ def pretokenize(
     input_path: str | os.PathLike, 
     desired_num_processes:int, 
     special_tokens: list[str],
-    return_counter: bool=False # faster when set to true for large datasets
+    return_counter: bool=False, # faster when set to true for large datasets
+    consume_special_token: bool = True
 )->list[str] | Counter[str]:
     with open(input_path, "rb") as f:
         special_tokens_bytes:list[bytes] = [s.encode("utf-8") for s in special_tokens]
@@ -123,7 +141,7 @@ def pretokenize(
                 max_chunks_found = len(boundaries)-1
                 max_chunk_boundaries = boundaries
     print("Num processes for pretokenization -- Desired:", desired_num_processes, "Actual:", max_chunks_found)
-    worker_fn = partial(pretokenize_chunk, input_path=input_path, special_tokens=special_tokens, pretokenize_regex=GPT2_PRE_TOKENIZER, return_counter=return_counter) 
+    worker_fn = partial(pretokenize_chunk, input_path=input_path, special_tokens=special_tokens, pretokenize_regex=GPT2_PRE_TOKENIZER, return_counter=return_counter, consume_special_token=consume_special_token) 
     workers_arg = list(zip(max_chunk_boundaries[:-1], max_chunk_boundaries[1:]))
     with multiprocessing.get_context("spawn").Pool(processes=max_chunks_found) as pool:
         results:list[list[str]] | list[Counter[str]]= pool.starmap(worker_fn, workers_arg)
