@@ -3,7 +3,7 @@ import math
 import torch
 from torch import nn
 import einx
-from jaxtyping import Float32
+from jaxtyping import Num, Integer
 
 class Linear(nn.Module):
 
@@ -21,7 +21,7 @@ class Linear(nn.Module):
         weights = nn.init.trunc_normal_(weights, mean, std_dev, a=-3*std_dev, b=3*std_dev)
         self.w = nn.Parameter(weights, requires_grad=True)
 
-    def forward(self, x:torch.Tensor) -> torch.Tensor:
+    def forward(self, x:Num[torch.Tensor, "... d_in"]) -> Num[torch.Tensor, "... d_out"]:
         return einx.dot("d_out [d_in], b... [d_in] -> b... d_out", self.w, x)
 
 class Embedding(nn.Module):
@@ -37,7 +37,7 @@ class Embedding(nn.Module):
         weights = nn.init.trunc_normal_(weights, mean=0, std=1, a=-3, b=3)
         self.embed_mat = nn.Parameter(weights, requires_grad=True)
 
-    def forward(self, token_ids: torch.Tensor) -> torch.Tensor:
+    def forward(self, token_ids: Integer[torch.Tensor, "batch_size seq_len"]) -> Integer[torch.Tensor, "batch_size seq_len d_model"]:
         # unsqueeze, then perform lookup on embedding matrix
         return einx.get_at("[vocab] d_model, batch_size (seq_len [1]) -> batch_size seq_len d_model", self.embed_mat, token_ids)
 
@@ -51,7 +51,7 @@ class RMSNorm(nn.Module):
         self.d_model:int = d_model
 
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: Num[torch.Tensor, "batch_size seq_len d_model"]) ->  Num[torch.Tensor, "batch_size seq_len d_model"]:
         in_dtype = x.dtype
         x = x.to(torch.float32)
 
@@ -82,4 +82,50 @@ class SwiGLU(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.w2(silu(self.w1(x)) * self.w3(x))
 
+
+class RotaryPositionalEmbedding(nn.Module):
+    def __init__(
+        self,
+        theta: float,
+        d_k: int,
+        max_seq_len: int,
+        device: torch.device | None = None,
+    ) -> None:
+        super().__init__()
+        assert d_k%2==0, "d_k must be divisible by 2 to use RoPE"
+
+        multiplier = torch.arange(max_seq_len)
+        angle = theta ** (-2*torch.arange(d_k//2)/d_k)
+        
+        # broadast: (max_seq_len x 1) x (1 x d_k_half) = (max_seq_len x d_k_half)
+        final_angle = einx.multiply('max_seq_len, d_k_half -> max_seq_len d_k_half', multiplier, angle).to(device=device)
+        
+        # persistent=False ensures that this tensor is not part of state_dict, which is okay since we can always recompute it.
+        self.register_buffer('cos_buf', torch.cos(torch.deg2rad(final_angle)), persistent=False)
+        self.register_buffer('sin_buf', torch.sin(torch.deg2rad(final_angle)), persistent=False)
+        
+
+    def forward(
+        self,
+        x: Num[torch.Tensor, "... seq_len d_k"],
+        token_positions: Num[torch.Tensor, "... seq_len"]
+    ) -> Num[torch.Tensor, "... seq_len d_k"]:  
+        
+        # index the cos and sin that we are interested in
+        cos_buf = einx.get_at("[max_seq_len] d_k_half, b... (seq_len [1]) -> b... seq_len d_k_half", self.cos_buf, token_positions)
+        sin_buf = einx.get_at("[max_seq_len] d_k_half, b... (seq_len [1]) -> b... seq_len d_k_half", self.sin_buf, token_positions)
+        
+        x = einx.rearrange("b... seq_len (d_k_half a) -> b... seq_len d_k_half a", x, a=2)
+        
+        x_odd = x[..., 0]
+        x_even = x[..., 1]
+
+        x_odd_new = (self.cos_buf * x_odd) + (self.sin_buf * x_even)
+        x_even_new = (self.cos_buf * x_even) - (self.sin_buf * x_odd)
+
+        x[..., 0] = x_odd_new
+        x[..., 1] = x_even_new
+        
+        x = einx.rearrange("b... seq_len d_k_half a -> b... seq_len (d_k_half a)", x, a=2)
+        return x
 
