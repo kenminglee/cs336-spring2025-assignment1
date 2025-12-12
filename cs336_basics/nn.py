@@ -117,14 +117,14 @@ class RotaryPositionalEmbedding(nn.Module):
         
         x = einx.rearrange("b... seq_len (d_k_half a) -> b... seq_len d_k_half a", x, a=2)
         
-        x_odd = x[..., 0]
-        x_even = x[..., 1]
+        x_even = x[..., 0]
+        x_odd = x[..., 1]
 
-        x_odd_new = (cos_buf * x_odd) - (sin_buf * x_even)
-        x_even_new = (cos_buf * x_even) + (sin_buf * x_odd)
+        x_even_new = (cos_buf * x_even) - (sin_buf * x_odd)
+        x_odd_new = (cos_buf * x_odd) + (sin_buf * x_even)
     
-        x[..., 0] = x_odd_new
-        x[..., 1] = x_even_new
+        x[..., 0] = x_even_new
+        x[..., 1] = x_odd_new
         
         x = einx.rearrange("b... seq_len d_k_half a -> b... seq_len (d_k_half a)", x, a=2)
         return x
