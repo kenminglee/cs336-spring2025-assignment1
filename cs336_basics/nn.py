@@ -259,5 +259,6 @@ class PreNormTransformerBlock(nn.Module):
 
         ln2_out = self.ln2(sublayer_1_out)
         ffn_out = self.ffn(ln2_out)
+        sublayer_2_out = ffn_out + sublayer_1_out
 
-        return ffn_out + sublayer_1_out
+        return sublayer_2_out
