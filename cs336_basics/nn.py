@@ -120,12 +120,9 @@ class RotaryPositionalEmbedding(nn.Module):
         x_even = x[..., 0]
         x_odd = x[..., 1]
 
-        x_even_new = (cos_buf * x_even) - (sin_buf * x_odd)
-        x_odd_new = (cos_buf * x_odd) + (sin_buf * x_even)
-    
         out = torch.zeros_like(x)
-        out[..., 0] = x_even_new
-        out[..., 1] = x_odd_new
+        out[..., 0] = (cos_buf * x_even) - (sin_buf * x_odd)
+        out[..., 1]  = (cos_buf * x_odd) + (sin_buf * x_even)
         
         x = einx.rearrange("b... seq_len d_k_half a -> b... seq_len (d_k_half a)", out, a=2)
         return x
