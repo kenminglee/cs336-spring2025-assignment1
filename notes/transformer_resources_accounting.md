@@ -206,15 +206,14 @@ As we can see, FFN requires the most FLOPs in the forward pass.
 
 We now compare between the FLOPs, and proportion for the different GPT variants:
 
-(Note: potential errors in calculation of medium and large)
 
 | GPT-2 variants | small | medium | large | XL |
 | --------------- | ------ | ------- | ------- | ------- |
-QKV+O Multiplication | 5.798E10, 10.8% | 1.546E11, 11.6% | 2.899E11, 11.9% | 1.007E12, 22.3% |
-Final output layer | 7.905E10, 14.7% | 1.054E11, 7.93% | 1.317E11, 5.43% | 1.646E11, 3.64% |
-Attention Operation | 3.865E10, 7.18% | 1.031E11, 7.75% | 1.933E11, 7.96% | 3.221E11, 7.14% | 
-FFN | 3.624E11, 67.3% | 9.664E11, 72.7% | 1.812E12, 74.7% | 3.020E12, 66.9% | 
-Total | 5.381E11 | 1.329E12 | 2.427E12 | 4.513E12 |
+QKV+O Multiplication | 5.798E10, 10.8% | 2.062E11, 14.9% | 4.832E11, 18.4% | 1.007E12, 22.3% |
+Final output layer | 7.905E10, 14.7% | 1.054E11, 7.63% | 1.317E11, 5.02% | 1.646E11, 3.64% |
+Attention Operation | 3.865E10, 7.18% | 1.031E11, 7.46% | 1.933E11, 7.38% | 3.221E11, 7.14% | 
+FFN | 3.624E11, 67.3% | 9.664E11, 70.0% | 1.812E12, 69.2% | 3.020E12, 66.9% | 
+Total | 5.381E11 | 1.381E12 | 2.620E12 | 4.513E12 |
 
 ## Increasing `context_length` of GPT-2 XL
 
