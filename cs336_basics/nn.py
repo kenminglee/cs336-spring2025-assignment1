@@ -122,9 +122,13 @@ class RotaryPositionalEmbedding(nn.Module):
         x_even = x[..., 0]
         x_odd = x[..., 1]
 
-        out = torch.zeros_like(x)
-        out[..., 0] = (cos_buf * x_even) - (sin_buf * x_odd)
-        out[..., 1]  = (cos_buf * x_odd) + (sin_buf * x_even)
+        out = torch.stack(
+            [
+                (cos_buf * x_even) - (sin_buf * x_odd), 
+                (cos_buf * x_odd) + (sin_buf * x_even)
+            ], 
+            dim=-1
+        )
         
         x = einx.rearrange("b... seq_len d_k_half a -> b... seq_len (d_k_half a)", out, a=2)
         return x
@@ -320,6 +324,7 @@ def cross_entropy_loss(
     logits = logits - torch.max(logits, dim=-1, keepdim=True).values
     logits_logsumexp = torch.log(logits.exp().sum(dim=-1))
 
+    # log cancels out exp term, hence a simple lookup
     logits_at_target = einx.get_at("batch_size [vocab], (batch_size [1]) -> batch_size", logits, target_indices)
     
     return (logits_logsumexp - logits_at_target).mean()
