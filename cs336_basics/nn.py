@@ -183,7 +183,7 @@ class MultiheadSelfAttention(nn.Module):
         V: Float[torch.Tensor, "batch_size head seq_len_k d_v"],
     )-> Float[torch.Tensor, "batch_size seq_len d_model"]:
          # batch_size x head x seq_len_q x seq_len_k
-        mask = torch.ones(Q.shape[:-1]+(K.shape[-2],))
+        mask = torch.ones(Q.shape[:-1]+(K.shape[-2],), device=Q.device)
         mask = torch.tril(mask).bool() # set upper triangular part to False
 
         attn = scaled_dot_product_attention(Q, K, V, mask=mask)
@@ -210,7 +210,7 @@ class MultiheadSelfAttentionWithRoPE(MultiheadSelfAttention):
     ) -> None:
         super().__init__(d_model=d_model, num_heads=num_heads, device=device, dtype=dtype)
         d_k = d_model//num_heads
-        self.rope = RotaryPositionalEmbedding(theta, d_k, max_seq_len)
+        self.rope = RotaryPositionalEmbedding(theta, d_k, max_seq_len, device=device)
 
     def forward(
         self,
@@ -410,23 +410,26 @@ def save_checkpoint(
     model: torch.nn.Module,
     optimizer: torch.optim.Optimizer,
     iteration: int,
-    out: str | os.PathLike | typing.BinaryIO | typing.IO[bytes]
+    out: str | os.PathLike | typing.BinaryIO | typing.IO[bytes],
+    **kwargs # auxiliary information
 ) -> None: 
-    torch.save(
-        {
-            "model":model.state_dict(),
-            "optimizer":optimizer.state_dict(),
-            "iteration":iteration
-        },
-        out
-    )
+    dict_to_save = {
+        "model":model.state_dict(),
+        "optimizer":optimizer.state_dict(),
+        "iteration":iteration
+    }
+    dict_to_save.update(kwargs)
+    torch.save(dict_to_save, out)
 
 def load_checkpoint(
     src: str | os.PathLike | typing.BinaryIO | typing.IO[bytes],
     model: torch.nn.Module,
-    optimizer: torch.optim.Optimizer
+    optimizer: torch.optim.Optimizer,
+    auxiliary_info: dict | None = None # additional info goes into this dictionary
 ) -> int:
     checkpoint = torch.load(src)
     model.load_state_dict(checkpoint["model"])
     optimizer.load_state_dict(checkpoint["optimizer"])
+    if auxiliary_info is not None:
+        auxiliary_info.update({k:v for k,v in checkpoint.items() if k not in {"model","optimizer","iteration"}})
     return checkpoint["iteration"]
