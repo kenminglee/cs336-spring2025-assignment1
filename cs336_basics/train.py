@@ -2,13 +2,11 @@ from dataclasses import dataclass
 import os
 from os.path import isfile
 from typing import Literal
-import typing
 import random
 import time
 
 import torch
 import numpy as np
-from numpy.lib.stride_tricks import sliding_window_view
 from jaxtyping import Float, Int 
 import tyro
 import wandb
@@ -19,7 +17,13 @@ from cs336_basics.bpe.tokenization import Tokenizer
 from cs336_basics.nn import TransformerLM, cross_entropy_loss
 
 
-def tokenize_dataset(dataset_path:str, tokenizer: Tokenizer, tokenized_dataset_path: str, split_token:bytes=b"<|endoftext|>", chunk_size:int=4096):
+def tokenize_dataset(
+        dataset_path:str, 
+        tokenizer: Tokenizer, 
+        tokenized_dataset_path: str, 
+        split_token:bytes=b"<|endoftext|>", 
+        chunk_size:int=4096
+    ):
     def find_document_boundaries():
         with open(dataset_path, "rb") as f:
             f.seek(0, os.SEEK_END)
@@ -82,30 +86,6 @@ def load_data(
     data_out = torch.tensor(dataset[starting_indices[:,None]+(offsets+1)], device=device, dtype=torch.long)
     return data_in, data_out
 
-def save_checkpoint(
-    model: torch.nn.Module,
-    optimizer: torch.optim.Optimizer,
-    iteration: int,
-    out: str | os.PathLike | typing.BinaryIO | typing.IO[bytes]
-) -> None: 
-    torch.save(
-        {
-            "model":model.state_dict(),
-            "optimizer":optimizer.state_dict(),
-            "iteration":iteration
-        },
-        out
-    )
-
-def load_checkpoint(
-    src: str | os.PathLike | typing.BinaryIO | typing.IO[bytes],
-    model: torch.nn.Module,
-    optimizer: torch.optim.Optimizer
-) -> int:
-    checkpoint = torch.load(src)
-    model.load_state_dict(checkpoint["model"])
-    optimizer.load_state_dict(checkpoint["optimizer"])
-    return checkpoint["iteration"]
 
 @dataclass
 class Args:

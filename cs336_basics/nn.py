@@ -1,5 +1,7 @@
 import math
 from collections.abc import Callable, Iterable
+import typing
+import os
 
 import torch
 from torch import nn
@@ -404,3 +406,27 @@ def clip_gradient(
             if param.grad is not None:
                 param.grad *= max_l2_norm/(l2_norm + eps)
     
+def save_checkpoint(
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    iteration: int,
+    out: str | os.PathLike | typing.BinaryIO | typing.IO[bytes]
+) -> None: 
+    torch.save(
+        {
+            "model":model.state_dict(),
+            "optimizer":optimizer.state_dict(),
+            "iteration":iteration
+        },
+        out
+    )
+
+def load_checkpoint(
+    src: str | os.PathLike | typing.BinaryIO | typing.IO[bytes],
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer
+) -> int:
+    checkpoint = torch.load(src)
+    model.load_state_dict(checkpoint["model"])
+    optimizer.load_state_dict(checkpoint["optimizer"])
+    return checkpoint["iteration"]
