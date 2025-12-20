@@ -449,7 +449,7 @@ def top_k_sampling(
         # So omit the last k indices, and zero out everything else before sampling
         indices_to_zero_out = sorted_idx[..., :-k]
         chosen_candidates = torch.scatter(probs, dim=-1, index=indices_to_zero_out, value=.0)
-        new_normalized_proba = softmax(chosen_candidates, -1)
+        new_normalized_proba = chosen_candidates / chosen_candidates.sum(dim=-1, keepdim=True)
         return torch.multinomial(new_normalized_proba, 1, generator=generator).squeeze(1)
 
 
@@ -475,9 +475,10 @@ def nucleus_sampling(
         # assign cumulative sum back to the original unsorted probs
         probs_cumsum = torch.scatter(probs, dim=-1, index=sorted_idx, src=sorted_probs_cumsum)
         # only keep those whose cumsum > 1-p
-        probs[probs_cumsum <= (1-p)] = float('-inf')
+        # set to 0 so that we don't have negative values, so no need to do a full softmax; a simple division will do
+        probs[probs_cumsum <= (1-p)] = 0
         # renormalize remaining vocab that we want to sample from
-        new_normalized_proba = softmax(probs, dim=-1)
+        new_normalized_proba = probs / probs.sum(dim=-1, keepdim=True)
         return torch.multinomial(new_normalized_proba, 1, generator=generator).squeeze(1)
     return sample
 
