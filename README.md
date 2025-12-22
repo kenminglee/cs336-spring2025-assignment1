@@ -48,3 +48,20 @@ gunzip owt_valid.txt.gz
 cd ..
 ```
 
+# Training instructions
+
+## Training a BPE Tokenizer
+
+Customize `cs336_basics/bpe/train.py`, then run it.
+
+## Training a LM
+
+Run `cs336_basics/train.py`. Hyperparameters can be specified via CLI (do `python cs336_basics/train.py --help`)  to see all options.
+
+## Running a hyperparameter sweep
+
+First create a sweep with the appropriate `.yaml` file in `hyperparameter_tuning` folder. E.g.,
+
+`wandb sweep --project "cs336-a1" --name "sweep-test" hyperparam_tuning/lr_sweep.yaml`
+
+This command will return the sweep ID. Next time, all we have to do is to run `wandb agent <entity>/<project-name>/<sweep-id>`.

@@ -129,11 +129,12 @@ class Args:
     beta_1: float = 0.9
     beta_2: float = 0.999
 
-    num_checkpoints: int = 5
+    num_checkpoints: int = 10
     save_path: str = os.path.join(ROOT_DIR, "../runs")
     batch_size: int = 64
-    training_steps: int = 1500
-    """Number of training steps. Each training step involves batch_size x context_length number of tokens"""
+    
+    tokens_processing_budget: int = 327680000
+    """Token processing budget. Number of training steps derived from this. Formula: batch_size x step x context_length = num_tokens_processed """
     log_freq: int = 5
     """How often to log metrics to WandB (steps/log)"""
     param_log_freq: int = 50
@@ -162,6 +163,7 @@ class Args:
 
 def train(args: Args):
     args.device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
+    args.training_steps = args.tokens_processing_budget//(args.batch_size*args.context_length)
 
     random.seed(args.seed)
     np.random.seed(args.seed)
