@@ -125,7 +125,7 @@ class Args:
 
     lr: float = 1e-3
     """Overriden if cosine-lr-schedule is used"""
-    weight_decay: float = 0.01
+    weight_decay: float = 0
     beta_1: float = 0.9
     beta_2: float = 0.999
 
