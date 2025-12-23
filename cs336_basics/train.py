@@ -163,6 +163,7 @@ class Args:
 
 def train(args: Args):
     args.device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
+    print(f"Running on: {args.device}")
     args.training_steps = args.tokens_processing_budget//(args.batch_size*args.context_length)
 
     random.seed(args.seed)
