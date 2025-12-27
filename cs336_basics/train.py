@@ -111,6 +111,8 @@ class Args:
     """Optional run name; ignored when resuming a run"""
     notes: str | None = None
     """Optional notes on this run (logged to WandB); ignored when resuming a run"""
+    wandb_tag: str | None = None
+    """Optional tag for this run (logged to WandB); ignored when resuming a run"""
 
     context_length: int = 256
     d_model : int = 512
@@ -269,6 +271,7 @@ def train(args: Args):
             dir=os.path.join(save_path, "wandb"),
             config=vars(args),
             group=args.dataset,
+            tags=[args.wandb_tag] if args.wandb_tag is not None else None,
             name=run_name,
             save_code=False,
             notes=args.notes
