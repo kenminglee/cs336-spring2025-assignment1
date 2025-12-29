@@ -89,6 +89,18 @@ class SwiGLU(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.w2(silu(self.w1(x)) * self.w3(x))
 
+# Like SwiGLU, but without gating mechanism
+class SiLUFFN(nn.Module):
+    def __init__(self, d_model:int, d_ff:int | None = None, device:torch.device | None = None, dtype: torch.dtype | None = None) -> None:
+        super().__init__()
+        if not d_ff:
+            d_ff:int = round((4*d_model)/64)
+            d_ff *= 64 # ensure that d_ff is multiple of 64
+        self.w1 = Linear(d_model, d_ff, device=device, dtype=dtype)
+        self.w2 = Linear(d_ff, d_model, device=device, dtype=dtype)
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.w2(silu(self.w1(x)))
 
 class RotaryPositionalEmbedding(nn.Module):
     def __init__(
