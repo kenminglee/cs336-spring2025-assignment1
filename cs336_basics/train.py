@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import os
 from typing import Literal
 import random
@@ -70,7 +70,7 @@ def sample_batch(
     dataset: Int[np.ndarray, " num_tokens "], 
     batch_size: int, 
     context_length: int, 
-    device: str,
+    device: str | torch.device,
     rng: np.random.Generator | None = None
 ) -> tuple[
     Int[torch.Tensor, "batch_size context_length"], 
@@ -161,20 +161,24 @@ class Args:
     max_gradient_norm: float = -1
     """Clip norm of gradient to this value. No clipping when set to -1."""
 
+    """The following won't show up in CLI args"""
+    device: torch.device = field(init=False)
+    training_steps: int = field(init=False)
+
+    def __post_init__(self):
+        self.device = torch.device("cuda" if torch.cuda.is_available() and self.cuda else "cpu")
+        self.training_steps = self.tokens_processing_budget//(self.batch_size*self.context_length)
 
 
 def train(args: Args):
-    args.device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
     print(f"Running on: {args.device}")
-    args.training_steps = args.tokens_processing_budget//(args.batch_size*args.context_length)
 
     random.seed(args.seed)
     np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
+    
     train_rng = np.random.default_rng(args.seed)
     valid_rng = np.random.default_rng(args.seed)
-    torch_gen = torch.Generator(device=args.device)
-    torch_gen.manual_seed(args.seed)
+    torch_gen = torch.manual_seed(args.seed)
 
     torch.backends.cudnn.deterministic = args.torch_deterministic
 

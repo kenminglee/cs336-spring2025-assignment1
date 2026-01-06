@@ -166,12 +166,13 @@ def scaled_dot_product_attention(
     # Computes QK^T / d_k^0.5
     scaled_qk_t = einx.dot("b... seq_len_q d_k, b... seq_len_k d_k -> b... seq_len_q seq_len_k", Q, K) / math.sqrt(Q.shape[-1])
 
-    to_add = torch.zeros_like(mask, dtype=torch.float)
-    to_add[~mask] = float('-inf')
+    if mask is not None:
+        to_add = torch.zeros_like(mask, dtype=torch.float)
+        to_add[~mask] = float('-inf')
 
-    scaled_qk_t_masked = einx.add("b... seq_len_q seq_len_k, b... seq_len_q seq_len_k -> b... seq_len_q seq_len_k", scaled_qk_t, to_add)
+        scaled_qk_t = einx.add("b... seq_len_q seq_len_k, b... seq_len_q seq_len_k -> b... seq_len_q seq_len_k", scaled_qk_t, to_add)
 
-    softmaxed_weights = softmax(scaled_qk_t_masked, dim=-1)
+    softmaxed_weights = softmax(scaled_qk_t, dim=-1)
     
     return einx.dot("b... seq_len_q seq_len_k, b... seq_len_k d_v -> b... seq_len_q d_v", softmaxed_weights, V)
 
@@ -499,10 +500,10 @@ def top_k_sampling(
         chosen_candidates = torch.scatter(probs, dim=-1, index=indices_to_zero_out, value=.0)
         new_normalized_proba = chosen_candidates / chosen_candidates.sum(dim=-1, keepdim=True)
         return torch.multinomial(new_normalized_proba, 1, generator=generator).squeeze(1)
-
+    return sample
 
 def nucleus_sampling(
-    p: int
+    p: float
 ) -> Callable[[Float[torch.Tensor, "... vocab_size"], torch.Generator], Int[torch.Tensor, " batch "]]:
     """
         Nucleus, or top-p sampling: Only want to sample from the (smallest possible) subset whose cumulative sum of probability is larger than p.
@@ -564,7 +565,7 @@ def generate_text(
         possible_next_tokens: Float[torch.Tensor, "1 vocab_size"] = model(torch.tensor(context[-model.context_length:], device=device).unsqueeze(dim=0))[0,-1, None] 
         probs = softmax(possible_next_tokens, dim=-1, temperature=softmax_temperature)
         next_tokenID = sampling_fn(probs, generator)[0].item()
-        context.append(next_tokenID)
+        context.append(int(next_tokenID))
         sampled_tokens += 1
 
     return tokenizer.decode(context[-sampled_tokens:])
