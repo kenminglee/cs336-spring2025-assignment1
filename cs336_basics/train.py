@@ -178,7 +178,7 @@ def train(args: Args):
     
     train_rng = np.random.default_rng(args.seed)
     valid_rng = np.random.default_rng(args.seed)
-    torch_gen = torch.manual_seed(args.seed)
+    torch_gen = torch.Generator(args.device).manual_seed(args.seed)
 
     torch.backends.cudnn.deterministic = args.torch_deterministic
 
